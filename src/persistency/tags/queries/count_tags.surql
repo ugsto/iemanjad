@@ -1,0 +1,1 @@
+SELECT COUNT(id) FROM tags GROUP ALL

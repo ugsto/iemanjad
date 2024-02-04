@@ -84,7 +84,7 @@ impl<TR: TagRepository> SurrealdbPostsRepository<TR> {
     async fn count_posts_in_db(&self) -> anyhow::Result<usize> {
         let total = self
             .db
-            .query("SELECT COUNT(id) FROM posts GROUP ALL")
+            .query(include_str!("./queries/count_posts.surql"))
             .await?
             .take::<Vec<SurrealCountRecord>>(0)?
             .first()
