@@ -22,3 +22,27 @@ pub async fn find_all_tags<T: TagRepository>(
         Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
     }
 }
+
+pub async fn update_tag<T: TagRepository>(
+    tag_repo: web::Data<T>,
+    name: web::Path<String>,
+    tag: web::Json<NewTag>,
+) -> impl Responder {
+    match tag_repo
+        .update(name.into_inner().as_str(), tag.into_inner())
+        .await
+    {
+        Ok(tag) => HttpResponse::Ok().json(tag),
+        Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
+    }
+}
+
+pub async fn delete_tag<T: TagRepository>(
+    tag_repo: web::Data<T>,
+    name: web::Path<String>,
+) -> impl Responder {
+    match tag_repo.delete(name.into_inner().as_str()).await {
+        Ok(_) => HttpResponse::NoContent().finish(),
+        Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
+    }
+}

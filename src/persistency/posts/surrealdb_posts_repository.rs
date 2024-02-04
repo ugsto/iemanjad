@@ -149,4 +149,12 @@ impl<TR: TagRepository> PostRepository for SurrealdbPostsRepository<TR> {
 
         Ok(FindPostsResponse { posts, total })
     }
+
+    async fn update(&self, id: &str, updated_post: NewPost) -> Result<Post, PostRepositoryError> {
+        todo!()
+    }
+
+    async fn delete(&self, id: &str) -> Result<(), PostRepositoryError> {
+        todo!()
+    }
 }

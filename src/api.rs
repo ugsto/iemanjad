@@ -3,7 +3,22 @@ use crate::{
     handlers,
     persistency::traits::{PostRepository, TagRepository},
 };
-use actix_web::{web, App, HttpServer};
+use actix_web::{
+    dev::{Service, ServiceRequest},
+    web, App, HttpServer,
+};
+use tracing::info;
+
+fn log_request(req: &ServiceRequest) {
+    let method = req.method();
+    let uri_path = req.uri().path();
+    let peer_addr = req
+        .peer_addr()
+        .map(|a| a.to_string())
+        .unwrap_or("UNKNOWN CLIENT".to_string());
+
+    info!("{method} {uri_path} | {peer_addr}");
+}
 
 pub async fn initialize_api<
     PR: PostRepository + Clone + Send + 'static,
@@ -17,7 +32,10 @@ pub async fn initialize_api<
         let tag_repository = tag_repository.clone();
 
         App::new()
-            .wrap(tracing_actix_web::TracingLogger::default())
+            .wrap_fn(|req, srv| {
+                log_request(&req);
+                srv.call(req)
+            })
             .app_data(web::Data::new(post_repository))
             .app_data(web::Data::new(tag_repository))
             .service(
@@ -29,6 +47,11 @@ pub async fn initialize_api<
                 web::resource("/api/v1/tags")
                     .route(web::get().to(handlers::tags::find_all_tags::<TR>))
                     .route(web::post().to(handlers::tags::create_tag::<TR>)),
+            )
+            .service(
+                web::resource("/api/v1/tags/{name}")
+                    .route(web::put().to(handlers::tags::update_tag::<TR>))
+                    .route(web::delete().to(handlers::tags::delete_tag::<TR>)),
             )
     });
 

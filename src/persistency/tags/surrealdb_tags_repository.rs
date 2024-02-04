@@ -90,6 +90,37 @@ impl SurrealdbTagsRepository {
 
         Ok(tags)
     }
+
+    async fn update_tag_in_db(
+        &self,
+        name: &str,
+        tag_entity: SurrealTagEntityInput,
+    ) -> Result<SurrealTagEntityOutput, TagRepositoryError> {
+        let tag = self
+            .db
+            .query(include_str!("./queries/update_tag.surql"))
+            .bind(("tag_old_name", name))
+            .bind(("tag_new_name", tag_entity.name))
+            .await
+            .map_err(TagRepositoryError::Database)?
+            .take::<Vec<SurrealTagEntityOutput>>(0)
+            .map_err(|_| TagRepositoryError::TagUpdate)?
+            .first()
+            .ok_or(TagRepositoryError::TagUpdate)?
+            .clone();
+
+        Ok(tag)
+    }
+
+    async fn delete_tag_in_db(&self, name: &str) -> Result<(), TagRepositoryError> {
+        self.db
+            .query(include_str!("./queries/delete_tag.surql"))
+            .bind(("tag_name", name))
+            .await
+            .map_err(TagRepositoryError::Database)?;
+
+        Ok(())
+    }
 }
 
 impl TagRepository for SurrealdbTagsRepository {
@@ -126,5 +157,19 @@ impl TagRepository for SurrealdbTagsRepository {
             .collect();
 
         Ok(tags)
+    }
+
+    async fn update(&self, name: &str, new_tag: NewTag) -> Result<Tag, TagRepositoryError> {
+        let tag_entity = SurrealTagEntityInput::from(new_tag);
+
+        let updated_tag = self.update_tag_in_db(name, tag_entity).await?.into();
+
+        Ok(updated_tag)
+    }
+
+    async fn delete(&self, name: &str) -> Result<(), TagRepositoryError> {
+        self.delete_tag_in_db(name).await?;
+
+        Ok(())
     }
 }
