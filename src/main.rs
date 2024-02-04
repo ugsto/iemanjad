@@ -4,6 +4,7 @@ use config::{
     strategies::{cli_config_loader::CliConfigLoader, env_config_loader::EnvConfigLoader},
     traits::PartialConfigLoader,
 };
+use migrations::{exec_migrations, MIGRATIONS};
 use persistency::{
     posts::surrealdb_posts_repository::SurrealdbPostsRepository,
     tags::surrealdb_tags_repository::SurrealdbTagsRepository,
@@ -14,6 +15,7 @@ use surrealdb::Surreal;
 
 mod config;
 mod handlers;
+mod migrations;
 mod models;
 mod persistency;
 mod utils;
@@ -54,6 +56,9 @@ async fn create_repositories(
 async fn main() -> io::Result<()> {
     let config = load_config();
     let db = load_db_connection(&config.db_address).await;
+
+    // TODO: Find more elegant way to do this
+    exec_migrations(&db, MIGRATIONS).await;
 
     let (post_repository, tag_repository) = create_repositories(db).await;
 
