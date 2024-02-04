@@ -7,4 +7,7 @@ pub enum ConfigLoadError {
 }
 
 #[derive(Debug, Error)]
-pub enum PartialConfigLoadError {}
+pub enum PartialConfigLoadError {
+    #[error("Unsupported log level: {0}")]
+    UnsupportedLogLevel(String),
+}

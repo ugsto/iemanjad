@@ -1,6 +1,9 @@
 use std::{net::SocketAddr, path::PathBuf};
 
-use super::models::ApiBind;
+use super::{
+    errors::PartialConfigLoadError,
+    models::{ApiBind, LogLevel},
+};
 
 impl From<&str> for ApiBind {
     fn from(api_bind: &str) -> Self {
@@ -11,6 +14,23 @@ impl From<&str> for ApiBind {
         let api_bind_path = PathBuf::from(api_bind);
 
         ApiBind::UnixSocket(api_bind_path.display().to_string())
+    }
+}
+
+impl TryFrom<&str> for LogLevel {
+    type Error = PartialConfigLoadError;
+
+    fn try_from(log_level: &str) -> Result<Self, PartialConfigLoadError> {
+        match log_level {
+            "trace" => Ok(LogLevel::Trace),
+            "debug" => Ok(LogLevel::Debug),
+            "info" => Ok(LogLevel::Info),
+            "warn" => Ok(LogLevel::Warn),
+            "error" => Ok(LogLevel::Error),
+            _ => Err(PartialConfigLoadError::UnsupportedLogLevel(
+                log_level.to_string(),
+            )),
+        }
     }
 }
 

@@ -1,20 +1,24 @@
-use actix_web::{web, App, HttpServer};
+use api::initialize_api;
 use config::{
-    models::{ApiBind, Config},
+    models::Config,
     strategies::{cli_config_loader::CliConfigLoader, env_config_loader::EnvConfigLoader},
     traits::PartialConfigLoader,
 };
+use logger::initialize_logger;
 use migrations::{exec_migrations, MIGRATIONS};
 use persistency::{
     posts::surrealdb_posts_repository::SurrealdbPostsRepository,
     tags::surrealdb_tags_repository::SurrealdbTagsRepository,
     traits::{PostRepository, TagRepository},
 };
-use std::{io, process::exit};
+use std::process::exit;
 use surrealdb::Surreal;
+use tracing::{debug, info};
 
+mod api;
 mod config;
 mod handlers;
+mod logger;
 mod migrations;
 mod models;
 mod persistency;
@@ -53,44 +57,27 @@ async fn create_repositories(
 }
 
 #[actix_web::main]
-async fn main() -> io::Result<()> {
+async fn main() {
     let config = load_config();
+
+    initialize_logger(&config.log_level);
+    debug!(?config);
+
+    debug!("Connecting to database...");
     let db = load_db_connection(&config.db_address).await;
+    debug!("Database connected");
 
     // TODO: Find more elegant way to do this
     exec_migrations(&db, MIGRATIONS).await;
 
+    debug!("Loading repositories...");
     let (post_repository, tag_repository) = create_repositories(db).await;
+    debug!("Repositories loaded");
 
-    let server = HttpServer::new(move || {
-        let post_repository = post_repository.clone();
-        let tag_repository = tag_repository.clone();
+    info!("Starting server on {:?}", config.api_bind);
+    initialize_api((post_repository, tag_repository), config.api_bind)
+        .await
+        .unwrap();
 
-        App::new()
-            .app_data(web::Data::new(post_repository))
-            .app_data(web::Data::new(tag_repository))
-            .service(
-                web::resource("/api/v1/posts")
-                    .route(web::post().to(handlers::posts::create_post::<
-                        SurrealdbPostsRepository<SurrealdbTagsRepository>,
-                    >))
-                    .route(web::get().to(handlers::posts::find_all_posts::<
-                        SurrealdbPostsRepository<SurrealdbTagsRepository>,
-                    >)),
-            )
-            .service(
-                web::resource("/api/v1/tags")
-                    .route(web::get().to(handlers::tags::find_all_tags::<SurrealdbTagsRepository>))
-                    .route(web::post().to(handlers::tags::create_tag::<SurrealdbTagsRepository>)),
-            )
-    });
-
-    let server = match config.api_bind {
-        ApiBind::UnixSocket(path) => server.bind_uds(path)?,
-        ApiBind::Tcp(address) => server.bind(address)?,
-    };
-
-    server.run().await?;
-
-    Ok(())
+    info!("Shutting down...");
 }
