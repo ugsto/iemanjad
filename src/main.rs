@@ -1,7 +1,6 @@
 use actix_web::{web, App, HttpServer};
 use persistency::{
     posts::surrealdb_posts_repository::SurrealdbPostsRepository,
-    posts_tags::surrealdb_posts_tags_repository::SurrealdbPostsTagsRepository,
     tags::surrealdb_tags_repository::SurrealdbTagsRepository,
     traits::{PostRepository, TagRepository},
 };
@@ -20,11 +19,7 @@ async fn create_repositories() -> (impl PostRepository + Clone, impl TagReposito
     db.use_ns("iemanjad").use_db("posts").await.unwrap();
 
     (
-        SurrealdbPostsRepository::new(
-            db.clone(),
-            SurrealdbTagsRepository::new(db.clone()),
-            SurrealdbPostsTagsRepository::new(db.clone()),
-        ),
+        SurrealdbPostsRepository::new(db.clone(), SurrealdbTagsRepository::new(db.clone())),
         SurrealdbTagsRepository::new(db.clone()),
     )
 }
@@ -44,16 +39,10 @@ async fn main() -> io::Result<()> {
             .service(
                 web::resource("/api/v1/posts")
                     .route(web::post().to(handlers::posts::create_post::<
-                        SurrealdbPostsRepository<
-                            SurrealdbTagsRepository,
-                            SurrealdbPostsTagsRepository,
-                        >,
+                        SurrealdbPostsRepository<SurrealdbTagsRepository>,
                     >))
                     .route(web::get().to(handlers::posts::find_all_posts::<
-                        SurrealdbPostsRepository<
-                            SurrealdbTagsRepository,
-                            SurrealdbPostsTagsRepository,
-                        >,
+                        SurrealdbPostsRepository<SurrealdbTagsRepository>,
                     >)),
             )
             .service(

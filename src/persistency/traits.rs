@@ -15,8 +15,3 @@ pub trait TagRepository {
     async fn find_all(&self, options: FindAllOptions) -> anyhow::Result<FindTagsResponse>;
     async fn find_in_names(&self, names: Vec<&str>) -> anyhow::Result<Vec<Tag>>;
 }
-
-pub trait PostsTagsRepository {
-    async fn relate(&self, post_id: &str, tag_ids: Vec<&str>) -> anyhow::Result<()>;
-    async fn find_tags_by_post_id(&self, post_id: &str) -> anyhow::Result<Vec<Tag>>;
-}
