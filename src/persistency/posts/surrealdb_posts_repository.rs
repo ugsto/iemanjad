@@ -14,16 +14,16 @@ use crate::{
     },
     utils::tag::{tags_diff_set, tags_to_ids},
 };
-use surrealdb::{engine::local::Db, Surreal};
+use surrealdb::Surreal;
 
 #[derive(Clone)]
 pub struct SurrealdbPostsRepository<TR: TagRepository> {
-    db: Surreal<Db>,
+    db: Surreal<surrealdb::engine::any::Any>,
     tags_repository: TR,
 }
 
 impl<TR: TagRepository> SurrealdbPostsRepository<TR> {
-    pub fn new(db: Surreal<Db>, tags_repository: TR) -> Self {
+    pub fn new(db: Surreal<surrealdb::engine::any::Any>, tags_repository: TR) -> Self {
         Self {
             db,
             tags_repository,

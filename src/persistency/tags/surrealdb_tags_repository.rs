@@ -9,15 +9,15 @@ use crate::{
         traits::TagRepository,
     },
 };
-use surrealdb::{engine::local::Db, Surreal};
+use surrealdb::Surreal;
 
 #[derive(Clone)]
 pub struct SurrealdbTagsRepository {
-    db: Surreal<Db>,
+    db: Surreal<surrealdb::engine::any::Any>,
 }
 
 impl SurrealdbTagsRepository {
-    pub fn new(db: Surreal<Db>) -> Self {
+    pub fn new(db: Surreal<surrealdb::engine::any::Any>) -> Self {
         Self { db }
     }
 }

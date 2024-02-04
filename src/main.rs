@@ -1,23 +1,49 @@
 use actix_web::{web, App, HttpServer};
+use config::{
+    models::{ApiBind, Config},
+    strategies::{cli_config_loader::CliConfigLoader, env_config_loader::EnvConfigLoader},
+    traits::PartialConfigLoader,
+};
 use persistency::{
     posts::surrealdb_posts_repository::SurrealdbPostsRepository,
     tags::surrealdb_tags_repository::SurrealdbTagsRepository,
     traits::{PostRepository, TagRepository},
 };
-use std::io;
-use surrealdb::{engine::local::SpeeDb, Surreal};
+use std::{io, process::exit};
+use surrealdb::Surreal;
 
+mod config;
 mod handlers;
 mod models;
 mod persistency;
 mod utils;
 
-async fn create_repositories() -> (impl PostRepository + Clone, impl TagRepository + Clone) {
-    let db = Surreal::new::<SpeeDb>("/tmp/iemanjad.surreal")
-        .await
-        .unwrap();
+fn load_config() -> Config {
+    let env_config = EnvConfigLoader::load_partial_config().unwrap_or_else(|e| {
+        eprintln!("Failed to load config from environment: {e}");
+        Default::default()
+    });
+    let cli_config = CliConfigLoader::load_partial_config().unwrap_or_else(|e| {
+        eprintln!("Failed to load config from CLI: {e}");
+        Default::default()
+    });
+
+    env_config.merge(cli_config).try_into().unwrap_or_else(|e| {
+        eprintln!("Failed to load config: {e}");
+        exit(1);
+    })
+}
+
+async fn load_db_connection(address: &str) -> Surreal<surrealdb::engine::any::Any> {
+    let db = surrealdb::engine::any::connect(address).await.unwrap();
     db.use_ns("iemanjad").use_db("posts").await.unwrap();
 
+    db
+}
+
+async fn create_repositories(
+    db: Surreal<surrealdb::engine::any::Any>,
+) -> (impl PostRepository + Clone, impl TagRepository + Clone) {
     (
         SurrealdbPostsRepository::new(db.clone(), SurrealdbTagsRepository::new(db.clone())),
         SurrealdbTagsRepository::new(db.clone()),
@@ -26,10 +52,12 @@ async fn create_repositories() -> (impl PostRepository + Clone, impl TagReposito
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
-    let unix_socket_path = "/tmp/actix-uds";
-    let (post_repository, tag_repository) = create_repositories().await;
+    let config = load_config();
+    let db = load_db_connection(&config.db_address).await;
 
-    HttpServer::new(move || {
+    let (post_repository, tag_repository) = create_repositories(db).await;
+
+    let server = HttpServer::new(move || {
         let post_repository = post_repository.clone();
         let tag_repository = tag_repository.clone();
 
@@ -50,10 +78,14 @@ async fn main() -> io::Result<()> {
                     .route(web::get().to(handlers::tags::find_all_tags::<SurrealdbTagsRepository>))
                     .route(web::post().to(handlers::tags::create_tag::<SurrealdbTagsRepository>)),
             )
-    })
-    .bind(("127.0.0.1", 8080))?
-    .run()
-    .await?;
+    });
+
+    let server = match config.api_bind {
+        ApiBind::UnixSocket(path) => server.bind_uds(path)?,
+        ApiBind::Tcp(address) => server.bind(address)?,
+    };
+
+    server.run().await?;
 
     Ok(())
 }
