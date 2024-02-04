@@ -1,4 +1,5 @@
 use super::{
+    errors::PostRepositoryError,
     models::{
         FindPostsResponse, NewPost, SurrealPostEntityInput, SurrealPostEntityOutput,
         SurrealPostEntityWithTagsOutput,
@@ -34,22 +35,28 @@ impl<TR: TagRepository> SurrealdbPostsRepository<TR> {
     async fn register_post_in_db(
         &self,
         post_entity: SurrealPostEntityInput,
-    ) -> anyhow::Result<SurrealPostEntityOutput> {
+    ) -> Result<SurrealPostEntityOutput, PostRepositoryError> {
         let post = self
             .db
             .query(include_str!("./queries/create_post.surql"))
             .bind(("post", post_entity))
-            .await?
-            .take::<Vec<SurrealPostEntityOutput>>(0)?
+            .await
+            .map_err(|e| PostRepositoryError::Database(e.into()))?
+            .take::<Vec<SurrealPostEntityOutput>>(0)
+            .map_err(|_| PostRepositoryError::PostCreation)?
             .first()
-            .ok_or(anyhow::anyhow!("Failed to create post"))
-            .cloned()?;
+            .cloned()
+            .ok_or(PostRepositoryError::PostCreation)?;
 
         Ok(post)
     }
 
-    async fn register_relations_in_db(&self, post_id: &str, tags: Vec<Tag>) -> anyhow::Result<()> {
-        let tag_ids = tags_to_ids(tags.clone());
+    async fn register_relations_in_db(
+        &self,
+        post_id: &str,
+        tags: Vec<Tag>,
+    ) -> Result<(), PostRepositoryError> {
+        let tag_ids = tags_to_ids(tags);
         let relate_queries = tag_ids
             .iter()
             .map(|tag_id| {
@@ -60,7 +67,11 @@ impl<TR: TagRepository> SurrealdbPostsRepository<TR> {
                 )
             })
             .collect::<Vec<_>>();
-        self.db.query(relate_queries.join(";")).await?;
+
+        self.db
+            .query(relate_queries.join(";"))
+            .await
+            .map_err(|e| PostRepositoryError::Database(e.into()))?;
 
         Ok(())
     }
@@ -69,24 +80,28 @@ impl<TR: TagRepository> SurrealdbPostsRepository<TR> {
         &self,
         limit: usize,
         offset: usize,
-    ) -> anyhow::Result<Vec<SurrealPostEntityWithTagsOutput>> {
+    ) -> Result<Vec<SurrealPostEntityWithTagsOutput>, PostRepositoryError> {
         let posts = self
             .db
             .query(include_str!("./queries/list_posts.surql"))
             .bind(("limit", limit))
             .bind(("offset", offset))
-            .await?
-            .take::<Vec<SurrealPostEntityWithTagsOutput>>(0)?;
+            .await
+            .map_err(|e| PostRepositoryError::Database(e.into()))?
+            .take::<Vec<SurrealPostEntityWithTagsOutput>>(0)
+            .map_err(|_| PostRepositoryError::PostListing)?;
 
         Ok(posts)
     }
 
-    async fn count_posts_in_db(&self) -> anyhow::Result<usize> {
+    async fn count_posts_in_db(&self) -> Result<usize, PostRepositoryError> {
         let total = self
             .db
             .query(include_str!("./queries/count_posts.surql"))
-            .await?
-            .take::<Vec<SurrealCountRecord>>(0)?
+            .await
+            .map_err(|e| PostRepositoryError::Database(e.into()))?
+            .take::<Vec<SurrealCountRecord>>(0)
+            .map_err(|_| PostRepositoryError::PostCount)?
             .first()
             .unwrap_or_default()
             .count;
@@ -96,16 +111,18 @@ impl<TR: TagRepository> SurrealdbPostsRepository<TR> {
 }
 
 impl<TR: TagRepository> PostRepository for SurrealdbPostsRepository<TR> {
-    async fn create(&self, new_post: NewPost) -> anyhow::Result<Post> {
+    async fn create(&self, new_post: NewPost) -> Result<Post, PostRepositoryError> {
         let tags = self
             .tags_repository
             .find_in_names(new_post.tags.iter().map(|tag| tag.as_str()).collect())
-            .await?;
+            .await
+            .map_err(|e| PostRepositoryError::Database(e.into()))?;
 
         if tags.len() != new_post.tags.len() {
             let diff = tags_diff_set(tags, &new_post.tags);
-
-            return Err(anyhow::anyhow!("Tags not found: {:?}", diff));
+            return Err(PostRepositoryError::TagsNotFound(
+                diff.into_iter().collect(),
+            ));
         }
 
         let post_entity = create_post_entity(new_post.title, new_post.content, chrono::Utc::now());
@@ -117,7 +134,10 @@ impl<TR: TagRepository> PostRepository for SurrealdbPostsRepository<TR> {
         Ok((created_post, tags).into())
     }
 
-    async fn find_all(&self, options: FindAllOptions) -> anyhow::Result<FindPostsResponse> {
+    async fn find_all(
+        &self,
+        options: FindAllOptions,
+    ) -> Result<FindPostsResponse, PostRepositoryError> {
         let posts = self
             .list_posts_in_db(options.limit, options.offset)
             .await?
