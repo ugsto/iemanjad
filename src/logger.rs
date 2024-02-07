@@ -17,6 +17,7 @@ pub fn initialize_logger(log_level: &LogLevel) {
     let log_level = tracing::Level::from(log_level);
     let filter = EnvFilter::from_default_env()
         .add_directive("none".parse().unwrap())
+        .add_directive("surrealdb=debug".parse().unwrap())
         .add_directive(
             format!("{}={}", env!("CARGO_PKG_NAME"), log_level)
                 .parse()

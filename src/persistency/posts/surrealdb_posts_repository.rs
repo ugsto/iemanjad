@@ -12,9 +12,10 @@ use crate::{
         models::{FindAllOptions, SurrealCountRecord},
         traits::{PostRepository, TagRepository},
     },
-    utils::tag::{tags_diff_set, tags_to_ids},
+    utils::tag::tags_diff_set,
 };
 use surrealdb::Surreal;
+use tracing::{debug, info};
 
 #[derive(Clone)]
 pub struct SurrealdbPostsRepository<TR: TagRepository> {
@@ -36,11 +37,17 @@ impl<TR: TagRepository> SurrealdbPostsRepository<TR> {
         &self,
         post_entity: SurrealPostEntityInput,
     ) -> Result<SurrealPostEntityOutput, PostRepositoryError> {
-        let post = self
+        debug!("Creating post...");
+
+        let result = self
             .db
             .query(include_str!("./queries/create_post.surql"))
             .bind(("post", post_entity))
-            .await
+            .await;
+
+        debug!("Created post: {result:?}");
+
+        let post = result
             .map_err(|e| PostRepositoryError::Database(e.into()))?
             .take::<Vec<SurrealPostEntityOutput>>(0)
             .map_err(|_| PostRepositoryError::PostCreation)?
@@ -48,30 +55,35 @@ impl<TR: TagRepository> SurrealdbPostsRepository<TR> {
             .cloned()
             .ok_or(PostRepositoryError::PostCreation)?;
 
+        info!("Created post: {post:?}");
+
         Ok(post)
     }
 
-    async fn register_relations_in_db(
+    async fn sync_relations_in_db(
         &self,
         post_id: &str,
-        tags: Vec<Tag>,
+        tags: &[Tag],
     ) -> Result<(), PostRepositoryError> {
-        let tag_ids = tags_to_ids(tags);
-        let relate_queries = tag_ids
+        debug!("Syncing relations for post {post_id} with tags {tags:?}...");
+
+        let post_id = format!("posts:{}", post_id);
+        let tag_ids = tags
             .iter()
-            .map(|tag_id| {
-                format!(
-                    include_str!("./queries/relate_post_to_tag.tmpl"),
-                    tag_id = tag_id,
-                    post_id = post_id
-                )
-            })
+            .map(|tag| format!("tags:{}", tag.id))
             .collect::<Vec<_>>();
 
-        self.db
-            .query(relate_queries.join(";"))
+        debug!("Syncing relations for post {post_id} with tags {tag_ids:?}...");
+
+        let response = self
+            .db
+            .query(include_str!("./queries/sync_relations.surql"))
+            .bind(("post_id", post_id.as_str()))
+            .bind(("tag_ids", &tag_ids))
             .await
             .map_err(|e| PostRepositoryError::Database(e.into()))?;
+
+        info!("Synced relations for post {post_id} with tags {tag_ids:?}: {response:?}");
 
         Ok(())
     }
@@ -81,24 +93,38 @@ impl<TR: TagRepository> SurrealdbPostsRepository<TR> {
         limit: usize,
         offset: usize,
     ) -> Result<Vec<SurrealPostEntityWithTagsOutput>, PostRepositoryError> {
-        let posts = self
+        debug!("Listing posts...");
+
+        let result = self
             .db
             .query(include_str!("./queries/list_posts.surql"))
             .bind(("limit", limit))
             .bind(("offset", offset))
-            .await
+            .await;
+
+        debug!("Listed posts: {result:?}");
+
+        let posts = result
             .map_err(|e| PostRepositoryError::Database(e.into()))?
             .take::<Vec<SurrealPostEntityWithTagsOutput>>(0)
             .map_err(|_| PostRepositoryError::PostListing)?;
+
+        info!("Listed posts: {posts:?}");
 
         Ok(posts)
     }
 
     async fn count_posts_in_db(&self) -> Result<usize, PostRepositoryError> {
-        let total = self
+        debug!("Counting posts...");
+
+        let result = self
             .db
             .query(include_str!("./queries/count_posts.surql"))
-            .await
+            .await;
+
+        debug!("Counted posts: {result:?}");
+
+        let total = result
             .map_err(|e| PostRepositoryError::Database(e.into()))?
             .take::<Vec<SurrealCountRecord>>(0)
             .map_err(|_| PostRepositoryError::PostCount)?
@@ -106,7 +132,61 @@ impl<TR: TagRepository> SurrealdbPostsRepository<TR> {
             .unwrap_or_default()
             .count;
 
+        info!("Counted posts: {total}");
+
         Ok(total)
+    }
+
+    async fn update_post_in_db(
+        &self,
+        post_id: &str,
+        post_entity: &SurrealPostEntityInput,
+    ) -> Result<SurrealPostEntityOutput, PostRepositoryError> {
+        let post_id = format!("posts:{post_id}");
+
+        debug!("Updating post {post_id}: {post_entity:?}...");
+
+        let response = self
+            .db
+            .query(include_str!("./queries/update_posts.surql"))
+            .bind(("id", post_id.as_str()))
+            .bind(("title", post_entity.title.as_str()))
+            .bind(("content", post_entity.content.as_str()))
+            .await;
+
+        debug!("Updated post {post_id}: {response:?}");
+
+        let post = response
+            .map_err(|e| PostRepositoryError::Database(e.into()))?
+            .take::<Vec<SurrealPostEntityOutput>>(0)
+            .map_err(|_| PostRepositoryError::PostUpdate)?
+            .first()
+            .cloned()
+            .ok_or(PostRepositoryError::PostUpdate)?;
+
+        debug!("Updated post {post_id}: {post:?}");
+
+        Ok(post)
+    }
+
+    async fn delete_post_in_db(&self, post_id: &str) -> Result<(), PostRepositoryError> {
+        let post_id = format!("posts:{post_id}");
+
+        debug!("Deleting post {post_id}...");
+
+        let response = self
+            .db
+            .query(include_str!("./queries/delete_post.surql"))
+            .bind(("post_id", post_id.as_str()))
+            .await;
+
+        debug!("Deleted post {post_id}: {response:?}");
+
+        response.map_err(|e| PostRepositoryError::Database(e.into()))?;
+
+        info!("Deleted post {post_id}");
+
+        Ok(())
     }
 }
 
@@ -128,8 +208,7 @@ impl<TR: TagRepository> PostRepository for SurrealdbPostsRepository<TR> {
         let post_entity = create_post_entity(new_post.title, new_post.content, chrono::Utc::now());
 
         let created_post = self.register_post_in_db(post_entity).await?;
-        self.register_relations_in_db(&created_post.id, tags.clone())
-            .await?;
+        self.sync_relations_in_db(&created_post.id, &tags).await?;
 
         Ok((created_post, tags).into())
     }
@@ -150,11 +229,29 @@ impl<TR: TagRepository> PostRepository for SurrealdbPostsRepository<TR> {
         Ok(FindPostsResponse { posts, total })
     }
 
-    async fn update(&self, id: &str, updated_post: NewPost) -> Result<Post, PostRepositoryError> {
-        todo!()
+    async fn update(&self, id: &str, new_post: NewPost) -> Result<Post, PostRepositoryError> {
+        let post_entity = create_post_entity(new_post.title, new_post.content, chrono::Utc::now());
+
+        let tags = self
+            .tags_repository
+            .find_in_names(
+                new_post
+                    .tags
+                    .iter()
+                    .map(|tag| tag.as_str())
+                    .collect::<Vec<_>>(),
+            )
+            .await
+            .unwrap();
+        let updated_post = self.update_post_in_db(id, &post_entity).await?;
+        self.sync_relations_in_db(&updated_post.id, &tags).await?;
+
+        Ok((updated_post, tags).into())
     }
 
     async fn delete(&self, id: &str) -> Result<(), PostRepositoryError> {
-        todo!()
+        self.delete_post_in_db(id).await?;
+
+        Ok(())
     }
 }

@@ -16,4 +16,7 @@ pub enum PostRepositoryError {
 
     #[error("Failed to count posts in the database")]
     PostCount,
+
+    #[error("Failed to update post in the database")]
+    PostUpdate,
 }

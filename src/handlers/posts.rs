@@ -21,3 +21,27 @@ pub async fn find_all_posts<T: PostRepository>(
         Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
     }
 }
+
+pub async fn update_post<T: PostRepository>(
+    post_repo: web::Data<T>,
+    id: web::Path<String>,
+    post: web::Json<NewPost>,
+) -> impl Responder {
+    match post_repo
+        .update(id.into_inner().as_str(), post.into_inner())
+        .await
+    {
+        Ok(post) => HttpResponse::Ok().json(post),
+        Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
+    }
+}
+
+pub async fn delete_post<T: PostRepository>(
+    post_repo: web::Data<T>,
+    id: web::Path<String>,
+) -> impl Responder {
+    match post_repo.delete(id.into_inner().as_str()).await {
+        Ok(_) => HttpResponse::NoContent().finish(),
+        Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
+    }
+}

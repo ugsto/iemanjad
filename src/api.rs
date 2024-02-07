@@ -44,6 +44,11 @@ pub async fn initialize_api<
                     .route(web::get().to(handlers::posts::find_all_posts::<PR>)),
             )
             .service(
+                web::resource("/api/v1/posts/{id}")
+                    .route(web::put().to(handlers::posts::update_post::<PR>))
+                    .route(web::delete().to(handlers::posts::delete_post::<PR>)),
+            )
+            .service(
                 web::resource("/api/v1/tags")
                     .route(web::get().to(handlers::tags::find_all_tags::<TR>))
                     .route(web::post().to(handlers::tags::create_tag::<TR>)),
