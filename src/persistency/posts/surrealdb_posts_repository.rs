@@ -242,7 +242,7 @@ impl<TR: TagRepository> PostRepository for SurrealdbPostsRepository<TR> {
                     .collect::<Vec<_>>(),
             )
             .await
-            .unwrap();
+            .map_err(|_| PostRepositoryError::PostUpdate)?;
         let updated_post = self.update_post_in_db(id, &post_entity).await?;
         self.sync_relations_in_db(&updated_post.id, &tags).await?;
 
