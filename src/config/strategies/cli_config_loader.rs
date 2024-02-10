@@ -13,7 +13,7 @@ pub struct CliConfigLoader {
     pub log_level: Option<String>,
 
     /// API binding address, e.g., "127.0.0.1:7029" for TCP or "/tmp/api.sock" for Unix socket
-    #[clap(long, default_value = "127.0.0.1:7029")]
+    #[clap(long, default_value = "/tmp/api.sock")]
     pub api_bind: Option<ApiBind>,
 
     /// Database address, e.g., "ws://127.0.0.1:8000" for external db or "speedb:///etc/iemanjad/iemanjad.surreal" for local
