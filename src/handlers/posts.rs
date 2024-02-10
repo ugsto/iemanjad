@@ -22,6 +22,16 @@ pub async fn find_all_posts<T: PostRepository>(
     }
 }
 
+pub async fn get_post<T: PostRepository>(
+    post_repo: web::Data<T>,
+    id: web::Path<String>,
+) -> impl Responder {
+    match post_repo.get(id.into_inner().as_str()).await {
+        Ok(post) => HttpResponse::Ok().json(post),
+        Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
+    }
+}
+
 pub async fn update_post<T: PostRepository>(
     post_repo: web::Data<T>,
     id: web::Path<String>,

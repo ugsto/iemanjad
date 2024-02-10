@@ -45,6 +45,7 @@ pub async fn initialize_api<
             )
             .service(
                 web::resource("/api/v1/posts/{id}")
+                    .route(web::get().to(handlers::posts::get_post::<PR>))
                     .route(web::put().to(handlers::posts::update_post::<PR>))
                     .route(web::delete().to(handlers::posts::delete_post::<PR>)),
             )
@@ -55,6 +56,7 @@ pub async fn initialize_api<
             )
             .service(
                 web::resource("/api/v1/tags/{name}")
+                    .route(web::get().to(handlers::tags::get_tag::<TR>))
                     .route(web::put().to(handlers::tags::update_tag::<TR>))
                     .route(web::delete().to(handlers::tags::delete_tag::<TR>)),
             )

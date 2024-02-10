@@ -17,6 +17,9 @@ pub enum TagRepositoryError {
     #[error("Failed to find tags by names in the database")]
     TagFind,
 
+    #[error("Failed to fetch tag from the database")]
+    TagGet,
+
     #[error("Failed to update tag in the database")]
     TagUpdate,
 }

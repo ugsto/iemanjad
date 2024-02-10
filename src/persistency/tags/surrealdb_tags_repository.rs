@@ -91,6 +91,25 @@ impl SurrealdbTagsRepository {
         Ok(tags)
     }
 
+    async fn get_tag_in_db(
+        &self,
+        name: &str,
+    ) -> Result<SurrealTagEntityOutput, TagRepositoryError> {
+        let tag = self
+            .db
+            .query(include_str!("./queries/get_tag.surql"))
+            .bind(("tag_name", name))
+            .await
+            .map_err(TagRepositoryError::Database)?
+            .take::<Vec<SurrealTagEntityOutput>>(0)
+            .map_err(|_| TagRepositoryError::TagGet)?
+            .first()
+            .cloned()
+            .ok_or(TagRepositoryError::TagGet)?;
+
+        Ok(tag)
+    }
+
     async fn update_tag_in_db(
         &self,
         name: &str,
@@ -157,6 +176,12 @@ impl TagRepository for SurrealdbTagsRepository {
             .collect();
 
         Ok(tags)
+    }
+
+    async fn get(&self, name: &str) -> Result<Tag, TagRepositoryError> {
+        let tag = self.get_tag_in_db(name).await?.into();
+
+        Ok(tag)
     }
 
     async fn update(&self, name: &str, new_tag: NewTag) -> Result<Tag, TagRepositoryError> {

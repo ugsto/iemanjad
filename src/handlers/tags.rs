@@ -23,6 +23,16 @@ pub async fn find_all_tags<T: TagRepository>(
     }
 }
 
+pub async fn get_tag<T: TagRepository>(
+    tag_repo: web::Data<T>,
+    name: web::Path<String>,
+) -> impl Responder {
+    match tag_repo.get(name.into_inner().as_str()).await {
+        Ok(tag) => HttpResponse::Ok().json(tag),
+        Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
+    }
+}
+
 pub async fn update_tag<T: TagRepository>(
     tag_repo: web::Data<T>,
     name: web::Path<String>,

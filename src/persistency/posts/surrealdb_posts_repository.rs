@@ -137,6 +137,35 @@ impl<TR: TagRepository> SurrealdbPostsRepository<TR> {
         Ok(total)
     }
 
+    async fn get_post_in_db(
+        &self,
+        post_id: &str,
+    ) -> Result<SurrealPostEntityWithTagsOutput, PostRepositoryError> {
+        let post_id = format!("posts:{post_id}");
+
+        debug!("Fetching post {post_id}...");
+
+        let result = self
+            .db
+            .query(include_str!("./queries/get_post.surql"))
+            .bind(("post_id", post_id.as_str()))
+            .await;
+
+        debug!("Fetched post: {result:?}");
+
+        let post = result
+            .map_err(|e| PostRepositoryError::Database(e.into()))?
+            .take::<Vec<SurrealPostEntityWithTagsOutput>>(0)
+            .map_err(|_| PostRepositoryError::PostGet)?
+            .first()
+            .cloned()
+            .ok_or(PostRepositoryError::PostGet)?;
+
+        info!("Fetched post: {post:?}");
+
+        Ok(post)
+    }
+
     async fn update_post_in_db(
         &self,
         post_id: &str,
@@ -227,6 +256,12 @@ impl<TR: TagRepository> PostRepository for SurrealdbPostsRepository<TR> {
         let total = self.count_posts_in_db().await?;
 
         Ok(FindPostsResponse { posts, total })
+    }
+
+    async fn get(&self, id: &str) -> Result<Post, PostRepositoryError> {
+        let post = self.get_post_in_db(id).await?;
+
+        Ok(post.into())
     }
 
     async fn update(&self, id: &str, new_post: NewPost) -> Result<Post, PostRepositoryError> {
