@@ -1,7 +1,7 @@
 # Iemanjad
 
-![https://img.shields.io/badge/Rust-000000.svg?style=flat&logo=Rust&logoColor=white](https://img.shields.io/badge/Rust-000000.svg?style=flat&logo=Rust&logoColor=white)
-[![test](https://github.com/ugsto/iemanjad/actions/workflows/test.yml/badge.svg)](https://github.com/ugsto/iemanjad/actions/workflows/test.yml)
+![Rust](https://img.shields.io/badge/Rust-000000.svg?style=flat&logo=Rust&logoColor=white)
+[![tests](https://github.com/ugsto/iemanjad/actions/workflows/tests.yml/badge.svg)](https://github.com/ugsto/iemanjad/actions/workflows/tests.yml)
 
 ---
 
