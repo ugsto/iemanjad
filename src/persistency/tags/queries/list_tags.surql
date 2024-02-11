@@ -1,1 +1,1 @@
-SELECT *, string::split(<string>id, ':')[1] AS id FROM tags LIMIT $limit START $offset
+SELECT *, string::split(<string>id, ':')[1] AS id FROM tags ORDER BY name LIMIT $limit START $offset
